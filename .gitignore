@@ -1,11 +1,11 @@
 target/
-lib_managed/
-src_managed/
+dist/
 project/boot/
 project/plugins/project/
-src/main/scala/com/twitter/sbt/BuildInfo.scala
-
-/standard-project.tmproj
+project/plugins/src_managed/
+*.log
+*.tmproj
+lib_managed/
 *.iml
-.idea
+.idea/
 .DS_Store

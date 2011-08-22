@@ -5,7 +5,7 @@ import _root_.xsbt.FileUtilities
 import java.io.{File, FileOutputStream, InputStream, OutputStream}
 
 object CompileThriftScrooge {
-  val ScroogeVersion = "1.0.0-SNAPSHOT"
+  val ScroogeVersion = "1.1.0"
   private[sbt] var cachedScroogeJarPath: Option[String] = None
 }
 
