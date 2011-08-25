@@ -1,58 +1,40 @@
 package com.twitter.sbt
 
 import _root_.sbt._
-import _root_.xsbt.FileUtilities
+import _root_.xsbt.{AllPassFilter, FileUtilities}
 import java.io.{File, FileOutputStream, InputStream, OutputStream}
 
 object CompileThriftScrooge {
-  val ScroogeVersion = "1.1.0"
+  val ScroogeVersion = "1.1.2-SNAPSHOT"
   private[sbt] var cachedScroogeJarPath: Option[String] = None
 }
 
-trait CompileThriftScrooge extends DefaultProject {
+/**
+ * This trait can be used when mixing in with CompileThrift* from sbt-thrift.
+ * It leaves certain values undefined which are defined by CompileThrift.
+ */
+trait CompileThriftScroogeMixin extends DefaultProject {
   import CompileThriftScrooge._
 
-  def generatedScalaDirectoryName = "gen-scala"
-  def generatedScalaPath = outputPath / generatedScalaDirectoryName
+  def generatedScalaDirectoryName: String
+  def generatedScalaPath: Path
+
+  def thriftSources: PathFinder // = (mainSourcePath / "thrift" ##) ** "*.thrift"
+  def thriftIncludeFolders: Seq[String] //= Nil
+
+  def thriftNamespaceMap: Map[String, String] = Map()
 
   override def mainSourceRoots = super.mainSourceRoots +++ (outputPath / generatedScalaDirectoryName ##)
 
-  lazy val cleanGenerated = (
-    cleanTask(generatedScalaPath)
-  ) describedAs "Clean generated source folders"
-
-  override def cleanAction = super.cleanAction dependsOn(cleanGenerated)
-
-  def thriftSources = (mainSourcePath / "thrift" ##) ** "*.thrift"
-  def thriftIncludeFolders: Seq[String] = Nil
-
   private[this] lazy val _scroogeBin = CompileThriftScrooge.synchronized {
     if (!cachedScroogeJarPath.isDefined) {
-      // TODO: we don't discriminate between versions here (which we need to..).
+      // extract scrooge.zip
       val stream = getClass.getResourceAsStream("/scrooge.zip")
-      val zipFile = File.createTempFile("scrooge", ".zip")
-      zipFile.deleteOnExit()
-      val fos = new FileOutputStream(zipFile)
-      try {
-        val buf = new Array[Byte](4096)
-        def copy(out: OutputStream, in: InputStream) {
-          val len = in.read(buf)
-          if (len > 0) {
-            out.write(buf, 0, len)
-            copy(out, in)
-          }
-        }
-        copy(fos, stream)
-      } finally {
-        fos.close()
-      }
-
       val scroogeDir = File.createTempFile("scrooge", "dir")
       scroogeDir.delete()
       scroogeDir.mkdir()
-      scroogeDir.deleteOnExit()
 
-      FileUtilities.unzip(zipFile, scroogeDir)
+      FileUtilities.unzip(stream, scroogeDir, AllPassFilter)
 
       val jarFile = new File(scroogeDir, "scrooge-" + ScroogeVersion + ".jar")
       cachedScroogeJarPath = Some(jarFile.getAbsolutePath())
@@ -69,21 +51,34 @@ trait CompileThriftScrooge extends DefaultProject {
     targetDir: File) =
   {
     task {
-      import Process._
-
-      targetDir.mkdirs()
-
-      val thriftIncludes = includeFolders.map { folder =>
-        new File(folder).getAbsolutePath
-      }.mkString(File.pathSeparator) match {
-        case "" => ""
-        case includes => "-i " + includes + " "
-      }
-
       val sourcePaths = thriftFiles.mkString(" ")
-      val cmd = "java -jar %s %s -d %s %s".format(scroogeBin, thriftIncludes, targetDir.getAbsolutePath, sourcePaths)
-      Console.println(cmd)
-      execTask(cmd).run
+
+      if (sourcePaths == "") {
+        None
+      } else {
+        import Process._
+
+        targetDir.mkdirs()
+
+        val thriftIncludes = includeFolders.map { folder =>
+          new File(folder).getAbsolutePath
+        }.mkString(File.pathSeparator) match {
+          case "" => ""
+          case includes => "-i " + includes + " "
+        }
+
+        val namespaceMappings = thriftNamespaceMap map {
+          case (k, v) => k + "->" + v
+        } match {
+          case m if m.isEmpty => ""
+          case m => "-n " + m.mkString(",")
+        }
+
+        val cmd = "java -jar %s %s %s -d %s %s".format(
+          scroogeBin, thriftIncludes, namespaceMappings, targetDir.getAbsolutePath, sourcePaths)
+        log.info(cmd)
+        execTask(cmd).run
+      }
     }
   }
 
@@ -97,4 +92,30 @@ trait CompileThriftScrooge extends DefaultProject {
   lazy val compileThriftScrooge = compileThriftScroogeAction
 
   override def compileAction = super.compileAction dependsOn(compileThriftScrooge)
+
+  /**
+   * Avoid the spinning ~compile
+   */
+  override def watchPaths = super.watchPaths.filter { path =>
+    !path.asFile.getAbsolutePath.contains("target/gen-")
+  }
+}
+
+/**
+ * This trait defines default values for all properties.
+ */
+trait CompileThriftScrooge extends CompileThriftScroogeMixin {
+  def generatedScalaDirectoryName = "gen-scala"
+  def generatedScalaPath = outputPath / generatedScalaDirectoryName
+
+  override def mainSourceRoots = super.mainSourceRoots +++ (outputPath / generatedScalaDirectoryName ##)
+
+  lazy val cleanGenerated = (
+    cleanTask(generatedScalaPath)
+  ) describedAs "Clean generated source folders"
+
+  override def cleanAction = super.cleanAction dependsOn(cleanGenerated)
+
+  def thriftSources = (mainSourcePath / "thrift" ##) ** "*.thrift"
+  def thriftIncludeFolders: Seq[String] = Nil
 }

@@ -1,11 +1,11 @@
 import sbt._
 import com.twitter.sbt._
 
-class SbtScroogePlugin(info: ProjectInfo) 
+class SbtScroogePlugin(info: ProjectInfo)
   extends PluginProject(info)
-  with StandardManagedProject 
-  with DefaultRepos 
-  with SubversionPublisher 
+  with StandardManagedProject
+  with DefaultRepos
+  with SubversionPublisher
 {
   override def disableCrossPaths = true
 
