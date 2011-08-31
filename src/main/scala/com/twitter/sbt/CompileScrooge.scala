@@ -5,7 +5,7 @@ import _root_.xsbt.{AllPassFilter, FileUtilities}
 import java.io.{File, FileOutputStream, InputStream, OutputStream}
 
 object CompileThriftScrooge {
-  val ScroogeVersion = "1.1.2-SNAPSHOT"
+  val ScroogeVersion = "1.1.2"
   private[sbt] var cachedScroogeJarPath: Option[String] = None
 }
 
@@ -74,7 +74,7 @@ trait CompileThriftScroogeMixin extends DefaultProject {
           case m => "-n " + m.mkString(",")
         }
 
-        val cmd = "java -jar %s %s %s -d %s %s".format(
+        val cmd = "java -jar %s %s %s -d %s -s %s".format(
           scroogeBin, thriftIncludes, namespaceMappings, targetDir.getAbsolutePath, sourcePaths)
         log.info(cmd)
         execTask(cmd).run
