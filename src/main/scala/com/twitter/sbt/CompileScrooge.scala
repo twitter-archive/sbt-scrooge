@@ -15,6 +15,11 @@ trait CompileThriftScroogeMixin extends DefaultProject {
    * Override this to use a different version of scrooge for code generation.
    */
   def scroogeVersion = "1.1.4"
+  
+  /**
+   * Override these to turn on/off generating ostrich or finagle bindings.
+   */
+  def scroogeBuildOptions = List("--finagle", "--ostrich")
 
   def scroogeName = "scrooge-" + scroogeVersion
   def scroogeCacheFolder = ("project" / "build" / "target" / scroogeName) ##
@@ -75,8 +80,10 @@ trait CompileThriftScroogeMixin extends DefaultProject {
           "-n " + k + "=" + v
         }.mkString(" ")
 
-        val cmd = "java -jar %s --verbose %s %s -d %s -s %s".format(
-          scroogeBin, thriftIncludes, namespaceMappings, targetDir.getAbsolutePath, sourcePaths)
+        val flags = List("--verbose") ++ scroogeBuildOptions
+        val cmd = "java -jar %s %s %s %s -d %s -s %s".format(
+          scroogeBin, flags.mkString(" "), thriftIncludes, namespaceMappings,
+          targetDir.getAbsolutePath, sourcePaths)
         log.info(cmd)
         execTask(cmd).run
       }
