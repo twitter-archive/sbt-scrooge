@@ -9,3 +9,6 @@ lib_managed/
 *.iml
 .idea/
 .DS_Store
+.classpath
+.project
+.scala_dependencies
