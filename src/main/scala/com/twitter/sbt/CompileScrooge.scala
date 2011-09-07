@@ -3,53 +3,65 @@ package com.twitter.sbt
 import _root_.sbt._
 import _root_.xsbt.{AllPassFilter, FileUtilities}
 import java.io.{File, FileOutputStream, InputStream, OutputStream}
-
-object CompileThriftScrooge {
-  val ScroogeVersion = "1.1.2"
-  private[sbt] var cachedScroogeJarPath: Option[String] = None
-}
+import java.net.URL
+import scala.collection.jcl
 
 /**
  * This trait can be used when mixing in with CompileThrift* from sbt-thrift.
  * It leaves certain values undefined which are defined by CompileThrift.
  */
 trait CompileThriftScroogeMixin extends DefaultProject {
-  import CompileThriftScrooge._
+  /**
+   * Override this to use a different version of scrooge for code generation.
+   */
+  def scroogeVersion = "1.1.4"
+  
+  /**
+   * Override these to turn on/off generating ostrich or finagle bindings.
+   */
+  def scroogeBuildOptions = List("--finagle", "--ostrich")
+
+  def scroogeName = "scrooge-" + scroogeVersion
+  def scroogeCacheFolder = ("project" / "build" / "target" / scroogeName) ##
+  def scroogeJar = scroogeCacheFolder / (scroogeName + ".jar")
 
   def generatedScalaDirectoryName: String
   def generatedScalaPath: Path
 
-  def thriftSources: PathFinder // = (mainSourcePath / "thrift" ##) ** "*.thrift"
-  def thriftIncludeFolders: Seq[String] //= Nil
+  def thriftSources: PathFinder
+  def thriftIncludeFolders: Seq[String]
 
   def thriftNamespaceMap: Map[String, String] = Map()
 
   override def mainSourceRoots = super.mainSourceRoots +++ (outputPath / generatedScalaDirectoryName ##)
 
-  private[this] lazy val _scroogeBin = CompileThriftScrooge.synchronized {
-    if (!cachedScroogeJarPath.isDefined) {
-      // extract scrooge.zip
-      val stream = getClass.getResourceAsStream("/scrooge.zip")
-      val scroogeDir = File.createTempFile("scrooge", "dir")
-      scroogeDir.delete()
-      scroogeDir.mkdir()
+  def scroogeBin: String = {
+    if (!scroogeJar.asFile.exists) {
+      log.info("Fetching scrooge " + scroogeVersion + " ...")
 
-      FileUtilities.unzip(stream, scroogeDir, AllPassFilter)
+      val environment = jcl.Map(System.getenv())
+      val repoUrl = environment.get("SBT_PROXY_REPO") getOrElse {
+        if (environment.get("SBT_TWITTER").isDefined) {
+          // backward compatibility: twitter's internal proxy
+          "http://artifactory.local.twitter.com/repo/"
+        } else {
+          "http://maven.twttr.com/"
+        }
+      }
+      val fetchUrl = repoUrl + "/com/twitter/scrooge/" + scroogeVersion + "/scrooge-" + scroogeVersion + ".zip"
 
-      val jarFile = new File(scroogeDir, "scrooge-" + ScroogeVersion + ".jar")
-      cachedScroogeJarPath = Some(jarFile.getAbsolutePath())
+      scroogeCacheFolder.asFile.mkdirs()
+      FileUtilities.unzip(new URL(fetchUrl).openStream, scroogeCacheFolder.asFile, AllPassFilter)
     }
 
-    cachedScroogeJarPath.get
+    scroogeJar.asFile.getAbsolutePath
   }
-
-  def scroogeBin = _scroogeBin
 
   def scroogeTask(
     thriftFiles: Iterable[String],
     includeFolders: Iterable[String],
-    targetDir: File) =
-  {
+    targetDir: File
+  ) = {
     task {
       val sourcePaths = thriftFiles.mkString(" ")
 
@@ -61,21 +73,17 @@ trait CompileThriftScroogeMixin extends DefaultProject {
         targetDir.mkdirs()
 
         val thriftIncludes = includeFolders.map { folder =>
-          new File(folder).getAbsolutePath
-        }.mkString(File.pathSeparator) match {
-          case "" => ""
-          case includes => "-i " + includes + " "
-        }
+          "-i " + new File(folder).getAbsolutePath
+        }.mkString(" ")
 
-        val namespaceMappings = thriftNamespaceMap map {
-          case (k, v) => k + "->" + v
-        } match {
-          case m if m.isEmpty => ""
-          case m => "-n " + m.mkString(",")
-        }
+        val namespaceMappings = thriftNamespaceMap.map { case (k, v) =>
+          "-n " + k + "=" + v
+        }.mkString(" ")
 
-        val cmd = "java -jar %s %s %s -d %s -s %s".format(
-          scroogeBin, thriftIncludes, namespaceMappings, targetDir.getAbsolutePath, sourcePaths)
+        val flags = List("--verbose") ++ scroogeBuildOptions
+        val cmd = "java -jar %s %s %s %s -d %s -s %s".format(
+          scroogeBin, flags.mkString(" "), thriftIncludes, namespaceMappings,
+          targetDir.getAbsolutePath, sourcePaths)
         log.info(cmd)
         execTask(cmd).run
       }
