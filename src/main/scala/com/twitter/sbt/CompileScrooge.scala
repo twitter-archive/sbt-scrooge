@@ -14,8 +14,8 @@ trait CompileThriftScroogeMixin extends DefaultProject {
   /**
    * Override this to use a different version of scrooge for code generation.
    */
-  def scroogeVersion = "1.1.4"
-  
+  def scroogeVersion = "1.1.5"
+
   /**
    * Override these to turn on/off generating ostrich or finagle bindings.
    */
