@@ -21,6 +21,11 @@ trait CompileThriftScroogeMixin extends DefaultProject {
    */
   def scroogeBuildOptions = List("--finagle", "--ostrich")
 
+  /**
+   * Turn me on to see the scrooge command-line (and possibly other debug info).
+   */
+  def scroogeDebug = false
+
   def scroogeName = "scrooge-" + scroogeVersion
   def scroogeCacheFolder = ("project" / "build" / "target" / scroogeName) ##
   def scroogeJar = scroogeCacheFolder / (scroogeName + ".jar")
@@ -49,6 +54,7 @@ trait CompileThriftScroogeMixin extends DefaultProject {
         }
       }
       val fetchUrl = repoUrl + "/com/twitter/scrooge/" + scroogeVersion + "/scrooge-" + scroogeVersion + ".zip"
+      if (scroogeDebug) log.info("Fetching from: " + fetchUrl)
 
       scroogeCacheFolder.asFile.mkdirs()
       FileUtilities.unzip(new URL(fetchUrl).openStream, scroogeCacheFolder.asFile, AllPassFilter)
@@ -84,7 +90,7 @@ trait CompileThriftScroogeMixin extends DefaultProject {
         val cmd = "java -jar %s %s %s %s -d %s -s %s".format(
           scroogeBin, flags.mkString(" "), thriftIncludes, namespaceMappings,
           targetDir.getAbsolutePath, sourcePaths)
-        log.info(cmd)
+        if (scroogeDebug) log.info(cmd)
         execTask(cmd).run
       }
     }
