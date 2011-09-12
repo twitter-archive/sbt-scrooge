@@ -1,7 +1,6 @@
 package com.twitter.sbt
 
 import _root_.sbt._
-import _root_.xsbt.{AllPassFilter, FileUtilities}
 import java.io.{File, FileOutputStream, InputStream, OutputStream}
 import java.net.URL
 import scala.collection.jcl
@@ -57,7 +56,8 @@ trait CompileThriftScroogeMixin extends DefaultProject {
       if (scroogeDebug) log.info("Fetching from: " + fetchUrl)
 
       scroogeCacheFolder.asFile.mkdirs()
-      FileUtilities.unzip(new URL(fetchUrl).openStream, scroogeCacheFolder.asFile, AllPassFilter)
+      FileUtilities.unzip(new URL(fetchUrl).openStream, scroogeCacheFolder, log)
+      FileUtilities.clean(generatedScalaPath, log)
     }
 
     scroogeJar.asFile.getAbsolutePath
