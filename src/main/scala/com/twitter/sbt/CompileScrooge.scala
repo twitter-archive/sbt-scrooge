@@ -120,9 +120,9 @@ trait CompileThriftScroogeMixin extends DefaultProject {
  */
 trait CompileThriftScrooge extends CompileThriftScroogeMixin {
   def generatedScalaDirectoryName = "gen-scala"
-  def generatedScalaPath = outputPath / generatedScalaDirectoryName
+  def generatedScalaPath = (outputPath / generatedScalaDirectoryName) ##
 
-  override def mainSourceRoots = super.mainSourceRoots +++ (outputPath / generatedScalaDirectoryName ##)
+  override def mainSourceRoots = super.mainSourceRoots +++ generatedScalaPath
 
   lazy val cleanGenerated = (
     cleanTask(generatedScalaPath)
