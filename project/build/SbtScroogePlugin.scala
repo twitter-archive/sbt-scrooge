@@ -9,7 +9,7 @@ class SbtScroogePlugin(info: ProjectInfo)
 {
   override def disableCrossPaths = true
 
-  override def subversionRepository = Some("http://svn.local.twitter.com/maven-public")
+  override def subversionRepository = Some("http://svn.twitter.biz/maven-public")
   override def managedStyle = ManagedStyle.Maven
   def snapshotDeployRepo = "libs-snapshots-local"
   def releaseDeployRepo = "libs-releases-local"
