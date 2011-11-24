@@ -13,7 +13,7 @@ trait CompileThriftScroogeMixin extends DefaultProject {
   /**
    * Override this to use a different version of scrooge for code generation.
    */
-  def scroogeVersion = "2.2.0"
+  def scroogeVersion = "2.3.0"
 
   /**
    * Override these to turn on/off generating ostrich or finagle bindings.
@@ -47,7 +47,7 @@ trait CompileThriftScroogeMixin extends DefaultProject {
       val repoUrl = environment.get("SBT_PROXY_REPO") getOrElse {
         if (environment.get("SBT_TWITTER").isDefined) {
           // backward compatibility: twitter's internal proxy
-          "http://artifactory.local.twitter.com/repo/"
+          "http://artifactory.twitter.biz/repo/"
         } else {
           "http://maven.twttr.com/"
         }
