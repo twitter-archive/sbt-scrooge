@@ -70,7 +70,66 @@ object CompileThriftScrooge extends Plugin {
    * the actual task to generate thrift
    */
   val scroogeGen = TaskKey[Seq[File]]("scrooge-gen", "generate thrift files using scrooge")
-  
+
+  val scopedSettings: Seq[Setting[_]] = Seq(Compile, Test).flatMap { scope =>
+    Seq(
+      scroogeThriftSourceDir in scope <<= (sourceDirectory in scope) { _ / "thrift" },
+      scroogeThriftSources in scope <<= (scroogeThriftSourceDir in scope) { srcDir => (srcDir ** "*.thrift").get },
+      scroogeThriftOutputDir in scope <<= (sourceManaged in scope) { _ / "scala" },
+      scroogeThriftIncludeFolders in scope := Seq(),
+      scroogeThriftNamespaceMap in scope := Map(),
+      // look at includes and our sources to see if anything is newer than any of our output files
+      scroogeIsDirty in scope <<= (streams in scope,
+                                   scroogeThriftSources in scope,
+                                   scroogeThriftOutputDir in scope,
+                                   scroogeThriftIncludeFolders in scope) map { (out, sources, outputDir, inc) => {
+        // figure out if we need to actually rebuild, based on mtimes
+        val allSourceDeps = sources ++ inc.foldLeft(Seq[File]()) { (files, dir) => files ++ (dir ** "*.thrift").get }
+        val sourcesLastModified:Seq[Long] = allSourceDeps.map(_.lastModified)
+        val newestSource = if (sourcesLastModified.size > 0) {
+          sourcesLastModified.max
+        } else {
+          Long.MaxValue
+        }
+        val outputsLastModified = (outputDir ** "*.scala").get.map(_.lastModified)
+        val oldestOutput = if (outputsLastModified.size > 0) {
+          outputsLastModified.min
+        } else {
+          Long.MinValue
+        }
+        oldestOutput < newestSource
+      }},
+      // actually run scrooge
+      scroogeGen in scope <<= (streams in scope,
+                               scroogeIsDirty in scope,
+                               scroogeThriftSources in scope,
+                               scroogeThriftOutputDir in scope,
+                               scroogeJar,
+                               scroogeBuildOptions in scope,
+                               scroogeThriftIncludeFolders in scope,
+                               scroogeThriftNamespaceMap in scope) map { (out, isDirty, sources, outputDir, jar, opts, inc, ns) => {
+        out.log.info("generating scrooge thrift for %s...".format(sources.mkString(", ")))
+        outputDir.mkdirs()
+        if (isDirty) {
+          val sourcePaths = sources.mkString(" ")
+          val namespaceMappings = ns.map { case (k, v) =>
+            "-n " + k + "=" + v
+          }.mkString(" ")
+          val thriftIncludes = inc.map { folder =>
+            "-i " + folder.getAbsolutePath
+          }.mkString(" ")
+          val cmd = "java -jar %s %s %s %s -d %s -s %s".format(
+            jar, opts.mkString(" "), thriftIncludes, namespaceMappings,
+            outputDir.getAbsolutePath, sources.mkString(" "))
+          out.log.info(cmd)
+          <x>{cmd}</x> !
+        }
+        (outputDir ** "*.scala").get.toSeq
+      }},
+      sourceGenerators in scope <+= scroogeGen in scope
+    )
+  }
+
   val newSettings = Seq(
     scroogeVersion := "2.4.0",
     scroogeBuildOptions := Seq("--finagle", "--ostrich"),
@@ -104,61 +163,6 @@ object CompileThriftScrooge extends Plugin {
       } else {
         None
       }
-    },
-    scroogeThriftSourceDir <<= (sourceDirectory in Compile) { _ / "thrift" },
-    scroogeThriftSources <<= (scroogeThriftSourceDir) { srcDir => (srcDir ** "*.thrift").get },
-    scroogeThriftOutputDir <<= (sourceManaged in Compile) { _ / "scala" },
-    scroogeThriftIncludeFolders := Seq(),
-    scroogeThriftNamespaceMap := Map(),
-    // look at includes and our sources to see if anything is newer than any of our output files
-    scroogeIsDirty <<= (streams,
-                    scroogeThriftSources,
-                    scroogeThriftOutputDir,
-                    scroogeThriftIncludeFolders) map { (out, sources, outputDir, inc) => {
-      // figure out if we need to actually rebuild, based on mtimes
-      val allSourceDeps = sources ++ inc.foldLeft(Seq[File]()) { (files, dir) => files ++ (dir ** "*.thrift").get }
-      val sourcesLastModified:Seq[Long] = allSourceDeps.map(_.lastModified)
-      val newestSource = if (sourcesLastModified.size > 0) {
-        sourcesLastModified.max
-      } else {
-        Long.MaxValue
-      }
-      val outputsLastModified = (outputDir ** "*.scala").get.map(_.lastModified)
-      val oldestOutput = if (outputsLastModified.size > 0) {
-        outputsLastModified.min
-      } else {
-        Long.MinValue
-      }
-      oldestOutput < newestSource
-    }},
-    // actually run scrooge
-    scroogeGen <<= (streams,
-                    scroogeIsDirty,
-                    scroogeThriftSources,
-                    scroogeThriftOutputDir,
-                    scroogeJar,
-                    scroogeBuildOptions,
-                    scroogeThriftIncludeFolders,
-                    scroogeThriftNamespaceMap) map { (out, isDirty, sources, outputDir, jar, opts, inc, ns) => {
-      out.log.info("generating scrooge thrift for %s...".format(sources.mkString(", ")))
-      outputDir.mkdirs()
-      if (isDirty) {
-        val sourcePaths = sources.mkString(" ")
-        val namespaceMappings = ns.map { case (k, v) =>
-          "-n " + k + "=" + v
-        }.mkString(" ")
-        val thriftIncludes = inc.map { folder =>
-          "-i " + folder.getAbsolutePath
-        }.mkString(" ")
-        val cmd = "java -jar %s %s %s %s -d %s -s %s".format(
-          jar, opts.mkString(" "), thriftIncludes, namespaceMappings,
-          outputDir.getAbsolutePath, sources.mkString(" "))
-        out.log.info(cmd)
-        <x>{cmd}</x> !
-      }
-      (outputDir ** "*.scala").get.toSeq
-    }},
-    // register ourselves with source generators
-    sourceGenerators in Compile <+= scroogeGen
-  )
+    }
+  ) ++ scopedSettings
 }

@@ -1,4 +1,4 @@
-namespace java com.twitter.test
+namespace java com.twitter.main
 
 exception AnException {}
 
