@@ -71,18 +71,23 @@ object CompileThriftScrooge extends Plugin {
    */
   val scroogeGen = TaskKey[Seq[File]]("scrooge-gen", "generate thrift files using scrooge")
 
-  val scopedSettings: Seq[Setting[_]] = Seq(Compile, Test).flatMap { scope =>
+  /**
+   * these settings will go into both the compile and test configurations.
+   * you can add them to other configurations by using inConfig(<config>)(genThriftSettings),
+   * e.g. inConfig(Assembly)(genThriftSettings)
+   */
+  val genThriftSettings: Seq[Setting[_]] = {
     Seq(
-      scroogeThriftSourceDir in scope <<= (sourceDirectory in scope) { _ / "thrift" },
-      scroogeThriftSources in scope <<= (scroogeThriftSourceDir in scope) { srcDir => (srcDir ** "*.thrift").get },
-      scroogeThriftOutputDir in scope <<= (sourceManaged in scope) { _ / "scala" },
-      scroogeThriftIncludeFolders in scope := Seq(),
-      scroogeThriftNamespaceMap in scope := Map(),
+      scroogeThriftSourceDir <<= (sourceDirectory) { _ / "thrift" },
+      scroogeThriftSources <<= (scroogeThriftSourceDir) { srcDir => (srcDir ** "*.thrift").get },
+      scroogeThriftOutputDir <<= (sourceManaged) { _ / "scala" },
+      scroogeThriftIncludeFolders := Seq(),
+      scroogeThriftNamespaceMap := Map(),
       // look at includes and our sources to see if anything is newer than any of our output files
-      scroogeIsDirty in scope <<= (streams in scope,
-                                   scroogeThriftSources in scope,
-                                   scroogeThriftOutputDir in scope,
-                                   scroogeThriftIncludeFolders in scope) map { (out, sources, outputDir, inc) => {
+      scroogeIsDirty <<= (streams,
+                                   scroogeThriftSources,
+                                   scroogeThriftOutputDir,
+                                   scroogeThriftIncludeFolders) map { (out, sources, outputDir, inc) => {
         // figure out if we need to actually rebuild, based on mtimes
         val allSourceDeps = sources ++ inc.foldLeft(Seq[File]()) { (files, dir) => files ++ (dir ** "*.thrift").get }
         val sourcesLastModified:Seq[Long] = allSourceDeps.map(_.lastModified)
@@ -100,14 +105,14 @@ object CompileThriftScrooge extends Plugin {
         oldestOutput < newestSource
       }},
       // actually run scrooge
-      scroogeGen in scope <<= (streams in scope,
-                               scroogeIsDirty in scope,
-                               scroogeThriftSources in scope,
-                               scroogeThriftOutputDir in scope,
+      scroogeGen <<= (streams,
+                               scroogeIsDirty,
+                               scroogeThriftSources,
+                               scroogeThriftOutputDir,
                                scroogeJar,
-                               scroogeBuildOptions in scope,
-                               scroogeThriftIncludeFolders in scope,
-                               scroogeThriftNamespaceMap in scope) map { (out, isDirty, sources, outputDir, jar, opts, inc, ns) => {
+                               scroogeBuildOptions,
+                               scroogeThriftIncludeFolders,
+                               scroogeThriftNamespaceMap) map { (out, isDirty, sources, outputDir, jar, opts, inc, ns) => {
         out.log.info("generating scrooge thrift for %s...".format(sources.mkString(", ")))
         outputDir.mkdirs()
         if (isDirty) {
@@ -126,13 +131,13 @@ object CompileThriftScrooge extends Plugin {
         }
         (outputDir ** "*.scala").get.toSeq
       }},
-      sourceGenerators in scope <+= scroogeGen in scope
+      sourceGenerators <+= scroogeGen
     )
   }
 
   val newSettings = Seq(
     scroogeVersion := "2.4.0",
-    scroogeBuildOptions := Seq("--finagle", "--ostrich"),
+    scroogeBuildOptions := Seq("--finagle", "--ostrich", "--verbose"),
     scroogeDebug := false,
     scroogeName <<= (scroogeVersion) { ver => "scrooge-%s".format(ver) },
     scroogeCacheFolder <<= (baseDirectory, scroogeName) { (base, scrooge) => base / "project" / "target" / scrooge },
@@ -164,5 +169,5 @@ object CompileThriftScrooge extends Plugin {
         None
       }
     }
-  ) ++ scopedSettings
+  ) ++ inConfig(Test)(genThriftSettings) ++ inConfig(Compile)(genThriftSettings)
 }
