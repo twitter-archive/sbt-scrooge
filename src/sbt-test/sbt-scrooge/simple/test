@@ -1,0 +1,5 @@
+> scrooge-fetch
+$ exists project/target/scrooge-2.4.0/scrooge-2.4.0.jar
+> compile
+$ exists target/scala-2.8.1/src_managed/main/com/twitter/test/test.scala
+$ exists target/scala-2.8.1/classes/com/twitter/test/A.class

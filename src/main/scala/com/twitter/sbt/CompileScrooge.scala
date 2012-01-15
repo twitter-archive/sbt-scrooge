@@ -1,135 +1,164 @@
 package com.twitter.sbt
+import scala.collection.mutable.Map
+import scala.collection.JavaConversions._
 
-import _root_.sbt._
-import java.io.{File, FileOutputStream, InputStream, OutputStream}
-import java.net.URL
-import scala.collection.jcl
+import sbt._
+import Keys._
+
 
 /**
- * This trait can be used when mixing in with CompileThrift* from sbt-thrift.
- * It leaves certain values undefined which are defined by CompileThrift.
+ * An SBT 0.11 plugin for generating thrift with scrooge
  */
-trait CompileThriftScroogeMixin extends DefaultProject {
+object CompileThriftScrooge extends Plugin {
+
+  // a bunch of keys for downloading a scrooge release
   /**
-   * Override this to use a different version of scrooge for code generation.
+   * which version of scrooge to use
    */
-  def scroogeVersion = "2.4.0"
-
+  val scroogeVersion = SettingKey[String]("scrooge-version", "version of scrooge to download and use")
   /**
-   * Override these to turn on/off generating ostrich or finagle bindings.
+   * whether to output debug logging
    */
-  def scroogeBuildOptions = List("--finagle", "--ostrich")
-
+  val scroogeDebug = SettingKey[Boolean]("scrooge-debug", "run scrooge in debug mode")
   /**
-   * Turn me on to see the scrooge command-line (and possibly other debug info).
+   * scrooge's version qualified name
    */
-  def scroogeDebug = false
+  val scroogeName = SettingKey[String]("scrooge-name", "scrooge's version qualified name (scrooge + '-' + scroogeVersion)")
+  /**
+   * the folder to unpack scrooge to
+   */
+  val scroogeCacheFolder = SettingKey[File]("scrooge-cache-folder", "where to unpack downloaded scrooge")
+  /**
+   * scrooge jar file
+   */
+  val scroogeJar = SettingKey[File]("scrooge-jar", "the local scrooge jar file")
+  /**
+   * get a scrooge zip, unpack it
+   */
+  val scroogeFetch = TaskKey[Option[File]]("scrooge-fetch", "fetch the scrooge zip package and unpack it to scrooge-cache-folder")
 
-  def scroogeName = "scrooge-" + scroogeVersion
-  def scroogeCacheFolder = ("project" / "build" / "target" / scroogeName) ##
-  def scroogeJar = scroogeCacheFolder / (scroogeName + ".jar")
+  // keys used for actual scrooge generation
+  /**
+   * command line args to pass to scrooge
+   */
+  val scroogeBuildOptions = SettingKey[Seq[String]]("scrooge-build-options", "command line args to pass to scrooge")
+  /**
+   * folders to look in for include thrift files
+   */
+  val scroogeThriftIncludeFolders = SettingKey[Seq[File]]("scrooge-thrift-include-folders", "folders to use in thrift includes")
+  /**
+   * map of thrift namespaces -> scala packages
+   */
+  val scroogeThriftNamespaceMap = SettingKey[Map[String, String]]("scrooge-thrift-namespace-map", "namespace rewriting, to support generationg of java/finagle/scrooge to the same jar")
+  /**
+   * directories to look in for thrift sources
+   */
+  val scroogeThriftSourceDir = SettingKey[File]("scrooge-thrift-source-dir", "directory containing thrift files")
+  /**
+   * thrift sources files (thriftSourceDir / ** (*.thrift))
+   */
+  val scroogeThriftSources = SettingKey[Seq[File]]("scrooge-thrift-sources", "thrift sources to compile")
+  /**
+   * where to spit out generated thrift. Note that this doesn *not* (by default) tack "scala" on the end
+   */
+  val scroogeThriftOutputDir = SettingKey[File]("scrooge-thrift-output-dir", "Directory where the scala files should be placed. Defaults to sourceManaged")
+  /**
+   * do we need to generate stuff
+   */
+  val scroogeIsDirty = TaskKey[Boolean]("scrooge-is-dirty", "do we need to regenerate")
+  /**
+   * the actual task to generate thrift
+   */
+  val scroogeGen = TaskKey[Seq[File]]("scrooge-gen", "generate thrift files using scrooge")
+  
+  val newSettings = Seq(
+    scroogeVersion := "2.4.0",
+    scroogeBuildOptions := Seq("--finagle", "--ostrich"),
+    scroogeDebug := false,
+    scroogeName <<= (scroogeVersion) { ver => "scrooge-%s".format(ver) },
+    scroogeCacheFolder <<= (baseDirectory, scroogeName) { (base, scrooge) => base / "project" / "target" / scrooge },
+    scroogeJar <<= (scroogeCacheFolder, scroogeName) { (folder, name) => folder / (name + ".jar")  },
+    scroogeFetch <<= (streams, scroogeCacheFolder, scroogeJar, scroogeVersion, scroogeDebug) map { (out, cacheFolder, jar, ver, debug) =>
+      if (!jar.exists) {
+        out.log.info("Fetching scrooge " + ver + " ...")
 
-  def generatedScalaDirectoryName: String
-  def generatedScalaPath: Path
-
-  def thriftSources: PathFinder
-  def thriftIncludeFolders: Seq[String]
-
-  def thriftNamespaceMap: Map[String, String] = Map()
-
-  override def mainSourceRoots = super.mainSourceRoots +++ (outputPath / generatedScalaDirectoryName ##)
-
-  def scroogeBin: String = {
-    if (!scroogeJar.asFile.exists) {
-      log.info("Fetching scrooge " + scroogeVersion + " ...")
-
-      val environment = jcl.Map(System.getenv())
-      val repoUrl = environment.get("SBT_PROXY_REPO") getOrElse {
-        if (environment.get("SBT_TWITTER").isDefined) {
-          // backward compatibility: twitter's internal proxy
-          "http://artifactory.twitter.biz/repo/"
-        } else {
-          "http://maven.twttr.com/"
+        val environment: Map[String, String] = System.getenv()
+        val repoUrl = environment.get("SBT_PROXY_REPO") getOrElse {
+          if (environment.get("SBT_TWITTER").isDefined) {
+            // backward compatibility: twitter's internal proxy
+            "http://artifactory.twitter.biz/repo/"
+          } else {
+            "http://maven.twttr.com/"
+          }
         }
-      }
-      val fetchUrl = repoUrl + "/com/twitter/scrooge/" + scroogeVersion + "/scrooge-" + scroogeVersion + ".zip"
-      if (scroogeDebug) log.info("Fetching from: " + fetchUrl)
+        val fetchUrl = repoUrl + "/com/twitter/scrooge/" + ver + "/scrooge-" + ver + ".zip"
+        if (debug) out.log.info("Fetching from: " + fetchUrl)
 
-      scroogeCacheFolder.asFile.mkdirs()
-      FileUtilities.unzip(new URL(fetchUrl).openStream, scroogeCacheFolder, log)
-      FileUtilities.clean(generatedScalaPath, log)
-    }
-
-    scroogeJar.asFile.getAbsolutePath
-  }
-
-  def scroogeTask(
-    thriftFiles: Iterable[String],
-    includeFolders: Iterable[String],
-    targetDir: File
-  ) = {
-    task {
-      val sourcePaths = thriftFiles.mkString(" ")
-
-      if (sourcePaths == "") {
-        None
+        cacheFolder.asFile.mkdirs()
+        IO.unzipURL(new URL(fetchUrl), cacheFolder)
+        if (jar.exists) {
+          Some(jar)
+        } else {
+          None
+        }
       } else {
-        import Process._
-
-        targetDir.mkdirs()
-
-        val thriftIncludes = includeFolders.map { folder =>
-          "-i " + new File(folder).getAbsolutePath
-        }.mkString(" ")
-
-        val namespaceMappings = thriftNamespaceMap.map { case (k, v) =>
+        None
+      }
+    },
+    scroogeThriftSourceDir <<= (sourceDirectory in Compile) { _ / "thrift" },
+    scroogeThriftSources <<= (scroogeThriftSourceDir) { srcDir => (srcDir ** "*.thrift").get },
+    scroogeThriftOutputDir <<= (sourceManaged in Compile) { _ / "scala" },
+    scroogeThriftIncludeFolders := Seq(),
+    scroogeThriftNamespaceMap := Map(),
+    // look at includes and our sources to see if anything is newer than any of our output files
+    scroogeIsDirty <<= (streams,
+                    scroogeThriftSources,
+                    scroogeThriftOutputDir,
+                    scroogeThriftIncludeFolders) map { (out, sources, outputDir, inc) => {
+      // figure out if we need to actually rebuild, based on mtimes
+      val allSourceDeps = sources ++ inc.foldLeft(Seq[File]()) { (files, dir) => files ++ (dir ** "*.thrift").get }
+      val sourcesLastModified:Seq[Long] = allSourceDeps.map(_.lastModified)
+      val newestSource = if (sourcesLastModified.size > 0) {
+        sourcesLastModified.max
+      } else {
+        Long.MaxValue
+      }
+      val outputsLastModified = (outputDir ** "*.scala").get.map(_.lastModified)
+      val oldestOutput = if (outputsLastModified.size > 0) {
+        outputsLastModified.min
+      } else {
+        Long.MinValue
+      }
+      oldestOutput < newestSource
+    }},
+    // actually run scrooge
+    scroogeGen <<= (streams,
+                    scroogeIsDirty,
+                    scroogeThriftSources,
+                    scroogeThriftOutputDir,
+                    scroogeJar,
+                    scroogeBuildOptions,
+                    scroogeThriftIncludeFolders,
+                    scroogeThriftNamespaceMap) map { (out, isDirty, sources, outputDir, jar, opts, inc, ns) => {
+      out.log.info("generating scrooge thrift for %s...".format(sources.mkString(", ")))
+      outputDir.mkdirs()
+      if (isDirty) {
+        val sourcePaths = sources.mkString(" ")
+        val namespaceMappings = ns.map { case (k, v) =>
           "-n " + k + "=" + v
         }.mkString(" ")
-
-        val flags = List("--verbose") ++ scroogeBuildOptions
+        val thriftIncludes = inc.map { folder =>
+          "-i " + folder.getAbsolutePath
+        }.mkString(" ")
         val cmd = "java -jar %s %s %s %s -d %s -s %s".format(
-          scroogeBin, flags.mkString(" "), thriftIncludes, namespaceMappings,
-          targetDir.getAbsolutePath, sourcePaths)
-        if (scroogeDebug) log.info(cmd)
-        execTask(cmd).run
+          jar, opts.mkString(" "), thriftIncludes, namespaceMappings,
+          outputDir.getAbsolutePath, sources.mkString(" "))
+        out.log.info(cmd)
+        <x>{cmd}</x> !
       }
-    }
-  }
-
-  // thrift generation.
-  def compileThriftScroogeAction = scroogeTask(
-    thriftSources.getPaths,
-    thriftIncludeFolders,
-    generatedScalaPath.asFile
-  ) describedAs("Compile thrift into scala")
-
-  lazy val compileThriftScrooge = compileThriftScroogeAction
-
-  override def compileAction = super.compileAction dependsOn(compileThriftScrooge)
-
-  /**
-   * Avoid the spinning ~compile
-   */
-  override def watchPaths = super.watchPaths.filter { path =>
-    !path.asFile.getAbsolutePath.contains("target/gen-")
-  }
-}
-
-/**
- * This trait defines default values for all properties.
- */
-trait CompileThriftScrooge extends CompileThriftScroogeMixin {
-  def generatedScalaDirectoryName = "gen-scala"
-  def generatedScalaPath = (outputPath / generatedScalaDirectoryName) ##
-
-  override def mainSourceRoots = super.mainSourceRoots +++ generatedScalaPath
-
-  lazy val cleanGenerated = (
-    cleanTask(generatedScalaPath)
-  ) describedAs "Clean generated source folders"
-
-  override def cleanAction = super.cleanAction dependsOn(cleanGenerated)
-
-  def thriftSources = (mainSourcePath / "thrift" ##) ** "*.thrift"
-  def thriftIncludeFolders: Seq[String] = Nil
+      (outputDir ** "*.scala").get.toSeq
+    }},
+    // register ourselves with source generators
+    sourceGenerators in Compile <+= scroogeGen
+  )
 }

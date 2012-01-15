@@ -1,70 +1,56 @@
 # sbt-scrooge
 
-Sbt-scrooge is an sbt plugin that adds a mixin for doing thrift code
-auto-generation during your compile phase. Just mix in `CompileThriftScrooge`
-into your project, and by default, all thrift files matching
-`src/thrift/*.thrift` will be used to auto-generate scala sources, written to
-target/gen-scala.
+Sbt-scrooge is an sbt plugin that adds support for using scrooge to
+generate thrift.
 
 
 ## Building
 
-To build, use sbt:
+Until standard-project is released as an sbt 0.11 plugin, you'll need
+to publish local. So... 
 
-    $ sbt package-dist
+    $sbt publish-local
 
 
+## Testing
+
+There is a really crude scripted plugin. You can run it with
+
+    $sbt scripted
+    
 ## How it works
 
-The plugin injects itself into your compile phase.
-
-It fetches scrooge from the public Twitter maven repository and caches it in
-`project/build/target`. (You can override this folder -- see below.) It then
-runs scrooge against your thrift folder, re-generating files only if they've
-changed. The generated code folder (usually `target/gen-scala`) is then added
-to your compile path.
+The plugin registers itself as a source generator for the compile phase.
 
 
-## Combining with sbt-thrift
+## Getting SbtScrooge
 
-If you still want to use the apache thrift generator in sbt-thrift (for
-example, to generate java or ruby bindings), use the `CompileThriftScroogeMixin`
-mixin instead. It leaves paths undefined so they can be defined once, in your
-sbt-thrift config.
+See https://github.com/harrah/xsbt/wiki/Plugins for information on
+adding plugins. In general, you'll need to add the following to your
+project/plugins.sbt file:
 
+    addSbtPlugin("com.twitter" % "sbt-scrooge" % "11.0.0-SNAPSHOT")
 
-## Configuration
+## Mixing in SbtSCrooge
 
-- `override def scroogeVersion = "1.1.7"`
+### Using a .sbt file
 
-  to use a different version of scrooge.
+    import com.twitter.sbt._
 
-- `override def scroogeBuildOptions = List("--finagle", "--ostrich")`
+    seq(SbtScrooge.newSettings: _*)
+    
+    
+### Using a .scala build definition
 
-  to change the generated code options. By default, finagle client/server and
-  ostrich service stubs are generated.
-
-- `override def scroogeDebug = false`
-
-  to see more debug info (like the scrooge command line)
-
-- `override def scroogeCacheFolder = ("project" / "build" / "target" / scroogeName) ##`
-
-  to change the folder that cached versions of scrooge are stored in.
-
-- `override def thriftSources = (mainSourcePath / "thrift" ##) ** "*.thrift"`
-
-  to change where thrift files are found.
-
-- `override def generatedScalaPath = (outputPath / "gen-scala") ##`
-
-  to change the default destination folder for generated scala files.
-
-- `override def thriftIncludeFolders: Seq[String] = Nil`
-
-  to set some default include paths for thrift.
-
-
+    import sbt._
+    import Keys._
+    import com.twitter.sbt._
+    
+    object Util extends Build {
+        lazy val root = Project(id = "util", base = file("."))
+            settings (SbtScrooge.settings: _*)
+    }
+    
 ## Upgrading from sbt-thrift
 
 The scala bindings are not 100% compatible with the scala bindings that were
