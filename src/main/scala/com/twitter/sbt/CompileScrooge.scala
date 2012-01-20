@@ -35,7 +35,7 @@ object CompileThriftScrooge extends Plugin {
   /**
    * get a scrooge zip, unpack it
    */
-  val scroogeFetch = TaskKey[Option[File]]("scrooge-fetch", "fetch the scrooge zip package and unpack it to scrooge-cache-folder")
+  val scroogeFetch = TaskKey[File]("scrooge-fetch", "fetch the scrooge zip package and unpack it to scrooge-cache-folder")
 
   // keys used for actual scrooge generation
   /**
@@ -59,7 +59,7 @@ object CompileThriftScrooge extends Plugin {
    */
   val scroogeThriftSources = SettingKey[Seq[File]]("scrooge-thrift-sources", "thrift sources to compile")
   /**
-   * where to spit out generated thrift. Note that this doesn *not* (by default) tack "scala" on the end
+   * where to spit out generated thrift. Note that this does *not* (by default) tack "scala" on the end
    */
   val scroogeThriftOutputDir = SettingKey[File]("scrooge-thrift-output-dir", "Directory where the scala files should be placed. Defaults to sourceManaged")
   /**
@@ -161,12 +161,12 @@ object CompileThriftScrooge extends Plugin {
         cacheFolder.asFile.mkdirs()
         IO.unzipURL(new URL(fetchUrl), cacheFolder)
         if (jar.exists) {
-          Some(jar)
+          jar
         } else {
-          None
+          error("failed to fetch and unpack %s".format(fetchUrl))
         }
       } else {
-        None
+        jar
       }
     }
   ) ++ inConfig(Test)(genThriftSettings) ++ inConfig(Compile)(genThriftSettings)
