@@ -11,6 +11,7 @@ service A {
   i32 multiply(1: i32 a, 2: i32 b);
 }
 
+/*
 service B extends A {
   i32 add(1: i32 a, 2: i32 b) throws (1: AnException ae);
   string foo();
@@ -19,3 +20,4 @@ service B extends A {
 
   oneway void someway();
 }
+*/

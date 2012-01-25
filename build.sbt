@@ -1,11 +1,20 @@
 organization := "com.twitter"
 
-name := "sbt-scrooge"
+name := "sbt-scrooge2"
 
-version := "11.0.0-SNAPSHOT"
+version := "0.0.1-SNAPSHOT"
 
 sbtPlugin := true
 
 seq(ScriptedPlugin.scriptedSettings: _*)
 
-scriptedLaunchOpts ++= Seq("-XX:+CMSClassUnloadingEnabled", "-XX:MaxPermSize=2024m")
+credentials += Credentials(Path.userHome / ".artifactory-credentials")
+
+publishTo <<= (version) { version: String =>
+  val artifactory = "http://artifactory.local.twitter.com/"
+  if (version.trim.endsWith("SNAPSHOT")) Some("snapshots" at artifactory + "libs-snapshots-local/") 
+  else                                   Some("releases"  at artifactory + "libs-releases-local/")
+}
+
+// for when my scriptedLaunchOpts change is published
+//scriptedLaunchOpts ++= Seq("-XX:+CMSClassUnloadingEnabled", "-XX:MaxPermSize=2024m")

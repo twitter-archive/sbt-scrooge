@@ -1,5 +1,4 @@
 package com.twitter.sbt
-import scala.collection.mutable.Map
 import scala.collection.JavaConversions._
 
 import sbt._
@@ -76,64 +75,62 @@ object CompileThriftScrooge extends Plugin {
    * you can add them to other configurations by using inConfig(<config>)(genThriftSettings),
    * e.g. inConfig(Assembly)(genThriftSettings)
    */
-  val genThriftSettings: Seq[Setting[_]] = {
-    Seq(
-      scroogeThriftSourceDir <<= (sourceDirectory) { _ / "thrift" },
-      scroogeThriftSources <<= (scroogeThriftSourceDir) { srcDir => (srcDir ** "*.thrift").get },
-      scroogeThriftOutputDir <<= (sourceManaged) { _ / "scala" },
-      scroogeThriftIncludeFolders := Seq(),
-      scroogeThriftNamespaceMap := Map(),
-      // look at includes and our sources to see if anything is newer than any of our output files
-      scroogeIsDirty <<= (streams,
-                                   scroogeThriftSources,
-                                   scroogeThriftOutputDir,
-                                   scroogeThriftIncludeFolders) map { (out, sources, outputDir, inc) => {
-        // figure out if we need to actually rebuild, based on mtimes
-        val allSourceDeps = sources ++ inc.foldLeft(Seq[File]()) { (files, dir) => files ++ (dir ** "*.thrift").get }
-        val sourcesLastModified:Seq[Long] = allSourceDeps.map(_.lastModified)
-        val newestSource = if (sourcesLastModified.size > 0) {
-          sourcesLastModified.max
-        } else {
-          Long.MaxValue
-        }
-        val outputsLastModified = (outputDir ** "*.scala").get.map(_.lastModified)
-        val oldestOutput = if (outputsLastModified.size > 0) {
-          outputsLastModified.min
-        } else {
-          Long.MinValue
-        }
-        oldestOutput < newestSource
-      }},
-      // actually run scrooge
-      scroogeGen <<= (streams,
-                               scroogeIsDirty,
-                               scroogeThriftSources,
-                               scroogeThriftOutputDir,
-                               scroogeJar,
-                               scroogeBuildOptions,
-                               scroogeThriftIncludeFolders,
-                               scroogeThriftNamespaceMap) map { (out, isDirty, sources, outputDir, jar, opts, inc, ns) => {
-        out.log.info("generating scrooge thrift for %s...".format(sources.mkString(", ")))
-        outputDir.mkdirs()
-        if (isDirty) {
-          val sourcePaths = sources.mkString(" ")
-          val namespaceMappings = ns.map { case (k, v) =>
-            "-n " + k + "=" + v
-          }.mkString(" ")
-          val thriftIncludes = inc.map { folder =>
-            "-i " + folder.getAbsolutePath
-          }.mkString(" ")
-          val cmd = "java -jar %s %s %s %s -d %s -s %s".format(
-            jar, opts.mkString(" "), thriftIncludes, namespaceMappings,
-            outputDir.getAbsolutePath, sources.mkString(" "))
-          out.log.info(cmd)
-          <x>{cmd}</x> !
-        }
-        (outputDir ** "*.scala").get.toSeq
-      }},
-      sourceGenerators <+= scroogeGen
-    )
-  }
+  val genThriftSettings: Seq[Setting[_]] = Seq(
+    scroogeThriftSourceDir <<= (sourceDirectory) { _ / "thrift" },
+    scroogeThriftSources <<= (scroogeThriftSourceDir) { srcDir => (srcDir ** "*.thrift").get },
+    scroogeThriftOutputDir <<= (sourceManaged) { _ / "scala" },
+    scroogeThriftIncludeFolders := Seq(),
+    scroogeThriftNamespaceMap := Map(),
+    // look at includes and our sources to see if anything is newer than any of our output files
+    scroogeIsDirty <<= (streams,
+                        scroogeThriftSources,
+                        scroogeThriftOutputDir,
+                        scroogeThriftIncludeFolders) map { (out, sources, outputDir, inc) => {
+      // figure out if we need to actually rebuild, based on mtimes
+      val allSourceDeps = sources ++ inc.foldLeft(Seq[File]()) { (files, dir) => files ++ (dir ** "*.thrift").get }
+      val sourcesLastModified:Seq[Long] = allSourceDeps.map(_.lastModified)
+      val newestSource = if (sourcesLastModified.size > 0) {
+        sourcesLastModified.max
+      } else {
+        Long.MaxValue
+      }
+      val outputsLastModified = (outputDir ** "*.scala").get.map(_.lastModified)
+      val oldestOutput = if (outputsLastModified.size > 0) {
+        outputsLastModified.min
+      } else {
+        Long.MinValue
+      }
+      oldestOutput < newestSource
+    }},
+    // actually run scrooge
+    scroogeGen <<= (streams,
+                    scroogeIsDirty,
+                    scroogeThriftSources,
+                    scroogeThriftOutputDir,
+                    scroogeFetch,
+                    scroogeBuildOptions,
+                    scroogeThriftIncludeFolders,
+                    scroogeThriftNamespaceMap) map { (out, isDirty, sources, outputDir, jar, opts, inc, ns) => {
+      out.log.info("generating scrooge thrift for %s...".format(sources.mkString(", ")))
+      outputDir.mkdirs()
+      if (isDirty) {
+        val sourcePaths = sources.mkString(" ")
+        val namespaceMappings = ns.map { case (k, v) =>
+          "-n " + k + "=" + v
+        }.mkString(" ")
+        val thriftIncludes = inc.map { folder =>
+          "-i " + folder.getAbsolutePath
+        }.mkString(" ")
+        val cmd = "java -jar %s %s %s %s -d %s -s %s".format(
+          jar, opts.mkString(" "), thriftIncludes, namespaceMappings,
+          outputDir.getAbsolutePath, sources.mkString(" "))
+        out.log.info(cmd)
+        <x>{cmd}</x> !
+      }
+      (outputDir ** "*.scala").get.toSeq
+    }},
+    sourceGenerators <+= scroogeGen
+  )
 
   val newSettings = Seq(
     scroogeVersion := "2.4.0",
@@ -146,7 +143,7 @@ object CompileThriftScrooge extends Plugin {
       if (!jar.exists) {
         out.log.info("Fetching scrooge " + ver + " ...")
 
-        val environment: Map[String, String] = System.getenv()
+        val environment: scala.collection.mutable.Map[String, String] = System.getenv()
         val repoUrl = environment.get("SBT_PROXY_REPO") getOrElse {
           if (environment.get("SBT_TWITTER").isDefined) {
             // backward compatibility: twitter's internal proxy
