@@ -12,7 +12,7 @@ object SbtScroogePlugin extends Build {
     organization := "com.twitter",
     name := "sbt-scrooge2",
     SubversionPublisher.subversionRepository := Some("https://svn.twitter.biz/maven-public"),
-    version := "0.0.1-SNAPSHOT",
+    version := "0.0.1",
     sbtPlugin := true
   )
   .settings(ScriptedPlugin.scriptedSettings: _*)
