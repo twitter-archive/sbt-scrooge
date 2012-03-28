@@ -81,7 +81,7 @@ work for anyone? -robey)
 
 
 # Notes for people upgrading from very old versions
-    
+
 ## Upgrading from sbt-thrift
 
 The scala bindings are not 100% compatible with the scala bindings that were
