@@ -1,19 +1,20 @@
 import sbt._
 import Keys._
-
 import com.twitter.sbt._
 
 object SbtScroogePlugin extends Build {
-  lazy val root = Project(id = "sbt-scrooge2",
-                          base = file("."))
-  .settings(StandardProject.newSettings: _*)
-  .settings(SubversionPublisher.newSettings: _*)
-  .settings(
+  lazy val root = Project(
+    id = "sbt11-scrooge",
+    base = file("."),
+    settings = StandardProject.newSettings ++
+      SubversionPublisher.newSettings
+  ).settings(
+    name := "sbt11-scrooge",
     organization := "com.twitter",
-    name := "sbt-scrooge2",
-    SubversionPublisher.subversionRepository := Some("https://svn.twitter.biz/maven-public"),
-    version := "0.0.2-SNAPSHOT",
-    sbtPlugin := true
+    version := "0.99.0-SNAPSHOT",
+    sbtPlugin := true,
+
+    SubversionPublisher.subversionRepository := Some("https://svn.twitter.biz/maven-public")
   )
   .settings(ScriptedPlugin.scriptedSettings: _*)
 }
