@@ -51,8 +51,8 @@ object CompileThriftScrooge extends Plugin {
     "namespace rewriting, to support generation of java/finagle/scrooge into the same jar"
   )
 
-  val scroogeThriftSourceDir = SettingKey[File](
-    "scrooge-thrift-source-dir",
+  val scroogeThriftSourceFolder = SettingKey[File](
+    "scrooge-thrift-source-folder",
     "directory containing thrift source files"
   )
 
@@ -61,8 +61,8 @@ object CompileThriftScrooge extends Plugin {
     "thrift source files to compile"
   )
 
-  val scroogeThriftOutputDir = SettingKey[File](
-    "scrooge-thrift-output-dir",
+  val scroogeThriftOutputFolder = SettingKey[File](
+    "scrooge-thrift-output-folder",
     "output folder for generated scala files (defaults to sourceManaged)"
   )
 
@@ -82,16 +82,17 @@ object CompileThriftScrooge extends Plugin {
    * e.g. inConfig(Assembly)(genThriftSettings)
    */
   val genThriftSettings: Seq[Setting[_]] = Seq(
-    scroogeThriftSourceDir <<= (sourceDirectory) { _ / "thrift" },
-    scroogeThriftSources <<= (scroogeThriftSourceDir) { srcDir => (srcDir ** "*.thrift").get },
-    scroogeThriftOutputDir <<= (sourceManaged) { _ / "scala" },
+    scroogeThriftSourceFolder <<= (sourceDirectory) { _ / "thrift" },
+    scroogeThriftSources <<= (scroogeThriftSourceFolder) { srcDir => (srcDir ** "*.thrift").get },
+    scroogeThriftOutputFolder <<= (sourceManaged) { _ / "scala" },
     scroogeThriftIncludeFolders := Seq(),
     scroogeThriftNamespaceMap := Map(),
+
     // look at includes and our sources to see if anything is newer than any of our output files
     scroogeIsDirty <<= (
       streams,
       scroogeThriftSources,
-      scroogeThriftOutputDir,
+      scroogeThriftOutputFolder,
       scroogeThriftIncludeFolders
     ) map { (out, sources, outputDir, inc) =>
       // figure out if we need to actually rebuild, based on mtimes.
@@ -112,12 +113,13 @@ object CompileThriftScrooge extends Plugin {
       }
       oldestOutput < newestSource
     },
+
     // actually run scrooge
     scroogeGen <<= (
       streams,
       scroogeIsDirty,
       scroogeThriftSources,
-      scroogeThriftOutputDir,
+      scroogeThriftOutputFolder,
       scroogeFetch,
       scroogeBuildOptions,
       scroogeThriftIncludeFolders,
