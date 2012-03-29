@@ -28,8 +28,9 @@ If you use a `build.sbt` file, add this incantation:
 
     seq(CompileThriftScrooge.newSettings: _*)
 
-If you use `Build.scala`, add `CompileThriftScrooge.newSettings` to your settings list. Here's a working example `project/plugins.sbt` and `project/Build.scala`:
+If you use `Build.scala`, add `CompileThriftScrooge.newSettings` to your settings list.
 
+Here's a working example `project/plugins.sbt`:
 
     resolvers += "twitter-repo" at "http://maven.twttr.com"
     
@@ -37,6 +38,7 @@ If you use `Build.scala`, add `CompileThriftScrooge.newSettings` to your setting
     
     addSbtPlugin("com.twitter" % "standard-project2" % "0.0.5")
 
+And `project/Build.scala`:
 
     import sbt._
     import Keys._
