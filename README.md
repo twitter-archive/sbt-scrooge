@@ -26,9 +26,51 @@ If you use a `build.sbt` file, add this incantation:
 
     import com.twitter.sbt._
 
-    seq(SbtScrooge.newSettings: _*)
+    seq(CompileThriftScrooge.newSettings: _*)
 
-If you use `Build.scala`, add `SbtScrooge.newSettings` to your settings list.
+If you use `Build.scala`, add `CompileThriftScrooge.newSettings` to your settings list. Here's a working example `project/plugins.sbt` and `project/Build.scala`:
+
+
+    resolvers += "twitter-repo" at "http://maven.twttr.com"
+    
+    addSbtPlugin("com.twitter" %% "sbt11-scrooge" % "1.0.0")
+    
+    addSbtPlugin("com.twitter" % "standard-project2" % "0.0.5")
+
+
+    import sbt._
+    import Keys._
+    import com.twitter.sbt._
+    
+    object YourProject extends Build {
+      val finagleVersion = "3.0.0"
+    
+      lazy val root = Project(
+        id = "yourproject",
+        base = file("."),
+        settings = Project.defaultSettings ++
+          StandardProject.newSettings ++
+          CompileThriftScrooge.newSettings
+      ).settings(
+        name := "yourproject",
+        organization := "com.example",
+        version := "1.0",
+        scalaVersion := "2.9.1",
+        
+        libraryDependencies ++= Seq(
+          "org.apache.thrift" % "libthrift" % "0.8.0" intransitive,
+          "com.twitter" %% "finagle-core" % finagleVersion,
+          "com.twitter" %% "finagle-thrift" % finagleVersion,
+          "org.jboss.netty" % "netty" % "3.2.6.Final",
+          "com.twitter" %% "scrooge-runtime" % "1.1.3"
+        ),
+        
+        CompileThriftScrooge.scroogeVersion := "2.5.4",
+        CompileThriftScrooge.scroogeBuildOptions := List("--finagle"),
+        PackageDist.packageDistConfigFilesValidationRegex := Some(".*")
+      )
+    }
+  
 
 ## Configuration
 
@@ -45,20 +87,19 @@ most likely to want to edit:
 
 - `scroogeBuildOptions: Seq[String]`
 
-  list of command-line arguments to pass to scrooge; by default this is
-  usually `Seq("--finagle", "--ostrich", "--verbose")`
+  list of command-line arguments to pass to scrooge (default: `Seq("--finagle", "--ostrich", "--verbose")`)
 
 - `scroogeThriftIncludeFolders: Seq[File]`
 
-  list of folders to search when processing "include" directives
+  list of folders to search when processing "include" directives (default: none)
 
 - `scroogeThriftSourceFolder: File`
 
-  where to find thrift files to compile
+  where to find thrift files to compile (default: `src/main/thrift/`)
 
 - `scroogeThriftOutputFolder: File`
 
-  where to put the generated scala files
+  where to put the generated scala files (default: `target/<scala-ver>/src_managed`)
 
 
 # Notes for helping work on sbt11-scrooge
