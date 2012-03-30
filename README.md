@@ -28,7 +28,8 @@ If you use a `build.sbt` file, add this incantation:
 
     seq(CompileThriftScrooge.newSettings: _*)
 
-If you use `Build.scala`, add `CompileThriftScrooge.newSettings` to your settings list.
+If you use `Build.scala`, add `CompileThriftScrooge.newSettings` to your
+settings list.
 
 Here's a working example `project/plugins.sbt`:
 
@@ -36,7 +37,7 @@ Here's a working example `project/plugins.sbt`:
     
     addSbtPlugin("com.twitter" %% "sbt11-scrooge" % "1.0.0")
     
-    addSbtPlugin("com.twitter" % "standard-project2" % "0.0.5")
+    addSbtPlugin("com.twitter" %% "sbt-package-dist" % "1.0.0")
 
 And `project/Build.scala`:
 
@@ -56,7 +57,7 @@ And `project/Build.scala`:
       ).settings(
         name := "yourproject",
         organization := "com.example",
-        version := "1.0",
+        version := "1.0.0-SNAPSHOT",
         scalaVersion := "2.9.1",
         
         libraryDependencies ++= Seq(
@@ -89,7 +90,8 @@ most likely to want to edit:
 
 - `scroogeBuildOptions: Seq[String]`
 
-  list of command-line arguments to pass to scrooge (default: `Seq("--finagle", "--ostrich", "--verbose")`)
+  list of command-line arguments to pass to scrooge (default:
+  `Seq("--finagle", "--ostrich", "--verbose")`)
 
 - `scroogeThriftIncludeFolders: Seq[File]`
 
