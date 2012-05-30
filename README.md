@@ -1,69 +1,131 @@
-# sbt-scrooge
+# sbt11-scrooge
 
-Sbt-scrooge is an sbt plugin that adds a mixin for doing thrift code
-auto-generation during your compile phase. Just mix in `CompileThriftScrooge`
-into your project, and by default, all thrift files matching
-`src/thrift/*.thrift` will be used to auto-generate scala sources, written to
-target/gen-scala.
-
-
-## Building
-
-To build, use sbt:
-
-    $ sbt package-dist
-
+Sbt11-scrooge is an sbt 0.11 plugin that adds support for using scrooge to
+perform thrift code generation.
 
 ## How it works
 
-The plugin injects itself into your compile phase.
+The plugin registers itself as a source generator for the compile phase.
 
-It fetches scrooge from the public Twitter maven repository and caches it in
-`project/build/target`. (You can override this folder -- see below.) It then
-runs scrooge against your thrift folder, re-generating files only if they've
-changed. The generated code folder (usually `target/gen-scala`) is then added
-to your compile path.
+It fetches scrooge from the public Twitter maven repository, caches it in your
+project, and runs it against your thrift folder (usually `src/main/thrift`).
+The generated code folder (usually `target/src_managed`) is then added to your
+compile path.
 
+## Using it
 
-## Combining with sbt-thrift
+See [the sbt page on plugins](https://github.com/harrah/xsbt/wiki/Plugins) for
+information on adding plugins. Usually, you need to add the following to your
+`project/plugins.sbt` file:
 
-If you still want to use the apache thrift generator in sbt-thrift (for
-example, to generate java or ruby bindings), use the `CompileThriftScroogeMixin`
-mixin instead. It leaves paths undefined so they can be defined once, in your
-sbt-thrift config.
+    addSbtPlugin("com.twitter" % "sbt11-scrooge" % "1.0.0")
 
+(But obviously, use the latest version number.)
+
+If you use a `build.sbt` file, add this incantation:
+
+    import com.twitter.sbt._
+
+    seq(CompileThriftScrooge.newSettings: _*)
+
+If you use `Build.scala`, add `CompileThriftScrooge.newSettings` to your
+settings list.
+
+Here's a working example `project/plugins.sbt`:
+
+    resolvers += "twitter-repo" at "http://maven.twttr.com"
+    
+    addSbtPlugin("com.twitter" %% "sbt11-scrooge" % "1.0.0")
+    
+    addSbtPlugin("com.twitter" %% "sbt-package-dist" % "1.0.0")
+
+And `project/Build.scala`:
+
+    import sbt._
+    import Keys._
+    import com.twitter.sbt._
+    
+    object YourProject extends Build {
+      val finagleVersion = "3.0.0"
+    
+      lazy val root = Project(
+        id = "yourproject",
+        base = file("."),
+        settings = Project.defaultSettings ++
+          StandardProject.newSettings ++
+          CompileThriftScrooge.newSettings
+      ).settings(
+        name := "yourproject",
+        organization := "com.example",
+        version := "1.0.0-SNAPSHOT",
+        scalaVersion := "2.9.1",
+        
+        libraryDependencies ++= Seq(
+          "org.apache.thrift" % "libthrift" % "0.8.0" intransitive,
+          "com.twitter" %% "finagle-core" % finagleVersion,
+          "com.twitter" %% "finagle-thrift" % finagleVersion,
+          "org.jboss.netty" % "netty" % "3.2.6.Final",
+          "com.twitter" %% "scrooge-runtime" % "1.1.3"
+        ),
+        
+        CompileThriftScrooge.scroogeVersion := "2.5.4",
+        CompileThriftScrooge.scroogeBuildOptions := List("--finagle"),
+        PackageDist.packageDistConfigFilesValidationRegex := Some(".*")
+      )
+    }
+  
 
 ## Configuration
 
-- `override def scroogeVersion = "1.1.7"`
+A full list of settings is in the (only) source file. Here are the ones you're
+most likely to want to edit:
 
-  to use a different version of scrooge.
+- `scroogeVersion: String`
 
-- `override def scroogeBuildOptions = List("--finagle", "--ostrich")`
+  to use a different version of scrooge than the current default
 
-  to change the generated code options. By default, finagle client/server and
-  ostrich service stubs are generated.
+- `scroogeCacheFolder: File`
 
-- `override def scroogeDebug = false`
+  to unpack the downloaded scrooge release into a different folder
 
-  to see more debug info (like the scrooge command line)
+- `scroogeBuildOptions: Seq[String]`
 
-- `override def scroogeCacheFolder = ("project" / "build" / "target" / scroogeName) ##`
+  list of command-line arguments to pass to scrooge (default:
+  `Seq("--finagle", "--ostrich", "--verbose")`)
 
-  to change the folder that cached versions of scrooge are stored in.
+- `scroogeThriftIncludeFolders: Seq[File]`
 
-- `override def thriftSources = (mainSourcePath / "thrift" ##) ** "*.thrift"`
+  list of folders to search when processing "include" directives (default: none)
 
-  to change where thrift files are found.
+- `scroogeThriftSourceFolder: File`
 
-- `override def generatedScalaPath = (outputPath / "gen-scala") ##`
+  where to find thrift files to compile (default: `src/main/thrift/`)
 
-  to change the default destination folder for generated scala files.
+- `scroogeThriftOutputFolder: File`
 
-- `override def thriftIncludeFolders: Seq[String] = Nil`
+  where to put the generated scala files (default: `target/<scala-ver>/src_managed`)
 
-  to set some default include paths for thrift.
 
+# Notes for helping work on sbt11-scrooge
+
+## Building
+
+To build the plugin locally and publish it to your local filesystem:
+
+    $ sbt publish-local
+
+## Testing
+
+There is a really crude scripted plugin. You can run it with:
+
+    $ sbt scripted
+
+It currently has the version number hard-coded, so you may need to update that
+manually. (Note: On my mac, this just consumes all memory and dies. Does this
+work for anyone? -robey)
+
+
+# Notes for people upgrading from very old versions
 
 ## Upgrading from sbt-thrift
 
@@ -85,7 +147,6 @@ generated by sbt-thrift. Here are the notable differences:
   - `BinaryThriftSerializer` is now `BinaryThriftStructSerializer[A]`, like:
 
       `val serializer = new BinaryThriftStructSerializer[Beer] { def codec = Beer }`
-
 
 ## Upgrading from java
 
