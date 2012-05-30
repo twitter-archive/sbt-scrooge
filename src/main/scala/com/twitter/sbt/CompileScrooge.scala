@@ -148,14 +148,14 @@ object CompileThriftScrooge extends Plugin {
   )
 
   val newSettings = Seq(
-    scroogeVersion := "2.4.0",
+    scroogeVersion := "3.0.0",
     scroogeBuildOptions := Seq("--finagle", "--ostrich", "--verbose"),
     scroogeName <<= (scroogeVersion) { ver => "scrooge-%s".format(ver) },
-    scroogeCacheFolder <<= (baseDirectory, scroogeName) { (base, scrooge) =>
-      base / "project" / "target" / scrooge
+    scroogeCacheFolder <<= (baseDirectory) { (base) =>
+      base / "project" / "target"
     },
     scroogeJar <<= (scroogeCacheFolder, scroogeName) { (folder, name) =>
-      folder / (name + ".jar")
+      folder / name / (name + ".jar")
     },
 
     scroogeFetch <<= (
@@ -168,8 +168,14 @@ object CompileThriftScrooge extends Plugin {
         out.log.info("Fetching scrooge " + ver + " ...")
 
         val environment = System.getenv().asScala
-        val repoUrl = environment.get("SBT_PROXY_REPO") getOrElse "http://maven.twttr.com/"
-        val fetchUrl = repoUrl + "/com/twitter/scrooge/" + ver + "/scrooge-" + ver + ".zip"
+        val homeRepo = environment.get("SBT_PROXY_REPO") getOrElse "http://maven.twttr.com/"
+        val localRepo = System.getProperty("user.home") + "/.m2/repository/"
+        val zipPath = "/com/twitter/scrooge/" + ver + "/scrooge-" + ver + ".zip"
+        val fetchUrl = if (new File(localRepo + zipPath).exists) {
+          "file:" + localRepo + zipPath
+        } else {
+          homeRepo + zipPath
+        }
         out.log.info("Fetching from: " + fetchUrl)
 
         cacheFolder.asFile.mkdirs()
