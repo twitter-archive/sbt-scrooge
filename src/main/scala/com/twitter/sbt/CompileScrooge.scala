@@ -148,14 +148,14 @@ object CompileThriftScrooge extends Plugin {
   )
 
   val newSettings = Seq(
-    scroogeVersion := "2.4.0",
+    scroogeVersion := "3.0.0",
     scroogeBuildOptions := Seq("--finagle", "--ostrich", "--verbose"),
     scroogeName <<= (scroogeVersion) { ver => "scrooge-%s".format(ver) },
-    scroogeCacheFolder <<= (baseDirectory, scroogeName) { (base, scrooge) =>
-      base / "project" / "target" / scrooge
+    scroogeCacheFolder <<= (baseDirectory) { (base) =>
+      base / "project" / "target"
     },
     scroogeJar <<= (scroogeCacheFolder, scroogeName) { (folder, name) =>
-      folder / (name + ".jar")
+      folder / name / (name + ".jar")
     },
 
     scroogeFetch <<= (
