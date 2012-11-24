@@ -18,7 +18,7 @@ See [the sbt page on plugins](https://github.com/harrah/xsbt/wiki/Plugins) for
 information on adding plugins. Usually, you need to add the following to your
 `project/plugins.sbt` file:
 
-    addSbtPlugin("com.twitter" % "sbt11-scrooge" % "1.0.0")
+    addSbtPlugin("com.twitter" % "sbt11-scrooge" % "3.0.1-SNAPSHOT")
 
 (But obviously, use the latest version number.)
 
@@ -35,9 +35,9 @@ Here's a working example `project/plugins.sbt`:
 
     resolvers += "twitter-repo" at "http://maven.twttr.com"
     
-    addSbtPlugin("com.twitter" %% "sbt11-scrooge" % "1.0.0")
+    addSbtPlugin("com.twitter" %% "sbt11-scrooge" % "3.0.1-SNAPSHOT")
     
-    addSbtPlugin("com.twitter" %% "sbt-package-dist" % "1.0.0")
+    addSbtPlugin("com.twitter" %% "sbt-package-dist" % "1.0.7")
 
 And `project/Build.scala`:
 
