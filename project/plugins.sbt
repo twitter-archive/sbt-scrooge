@@ -10,7 +10,6 @@ resolvers <<= (resolvers) { r =>
   } getOrElse {
     r ++ Seq(
       "twitter.com" at "http://maven.twttr.com/",
-      "scala-tools" at "http://scala-tools.org/repo-releases/",
       "maven" at "http://repo1.maven.org/maven2/",
       "freemarker" at "http://freemarker.sourceforge.net/maven2/"
     )
@@ -20,7 +19,7 @@ resolvers <<= (resolvers) { r =>
 externalResolvers <<= (resolvers) map identity
 
 libraryDependencies <+= (sbtVersion) { sv =>
-  "org.scala-tools.sbt" %% "scripted-plugin" % sv
+  "org.scala-sbt" %% "scripted-plugin" % sv
 }
 
-addSbtPlugin("com.twitter" % "sbt-package-dist" % "1.0.0")
+addSbtPlugin("com.twitter" % "sbt-package-dist" % "1.0.7")
