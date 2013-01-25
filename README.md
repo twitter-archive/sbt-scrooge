@@ -31,13 +31,21 @@ If you use a `build.sbt` file, add this incantation:
 If you use `Build.scala`, add `CompileThriftScrooge.newSettings` to your
 settings list.
 
-Here's a working example `project/plugins.sbt`:
+Here's a working example `project/plugins.sbt` for SBT 0.11.2:
 
     resolvers += "twitter-repo" at "http://maven.twttr.com"
     
-    addSbtPlugin("com.twitter" %% "sbt11-scrooge" % "1.0.0")
+    addSbtPlugin("com.twitter" %% "sbt11-scrooge" % "3.0.0")
+
+    addSbtPlugin("com.twitter" %% "sbt-package-dist" % "1.0.6")
+
+And for SBT 0.11.3:
+
+    resolvers += "twitter-repo" at "http://maven.twttr.com"
     
-    addSbtPlugin("com.twitter" %% "sbt-package-dist" % "1.0.0")
+    addSbtPlugin("com.twitter" %% "sbt11-scrooge" % "3.0.2")
+
+    addSbtPlugin("com.twitter" %% "sbt-package-dist" % "1.0.7")
 
 And `project/Build.scala`:
 
