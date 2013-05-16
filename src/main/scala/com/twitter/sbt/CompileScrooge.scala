@@ -15,6 +15,8 @@ object CompileThriftScrooge extends Plugin {
     "version of scrooge to download and use"
   )
 
+  val scroogeLanguages = SettingKey[Set[String]]("scrooge-languages","languages to generate thrift from")
+
   val scroogeName = SettingKey[String](
     "scrooge-name",
     "scrooge's version-qualified name ('scrooge-' + scrooge-version)"
@@ -87,7 +89,6 @@ object CompileThriftScrooge extends Plugin {
     scroogeThriftOutputFolder <<= (sourceManaged) { _ / "scala" },
     scroogeThriftIncludeFolders := Seq(),
     scroogeThriftNamespaceMap := Map(),
-
     // look at includes and our sources to see if anything is newer than any of our output files
     scroogeIsDirty <<= (
       streams,
@@ -123,8 +124,9 @@ object CompileThriftScrooge extends Plugin {
       scroogeFetch,
       scroogeBuildOptions,
       scroogeThriftIncludeFolders,
-      scroogeThriftNamespaceMap
-    ) map { (out, isDirty, sources, outputDir, jar, opts, inc, ns) =>
+      scroogeThriftNamespaceMap,
+      scroogeLanguages
+    ) map { (out, isDirty, sources, outputDir, jar, opts, inc, ns, languages) =>
       // for some reason, sbt sometimes calls us multiple times, often with no source files.
       outputDir.mkdirs()
       if (isDirty && !sources.isEmpty) {
@@ -136,13 +138,16 @@ object CompileThriftScrooge extends Plugin {
         val thriftIncludes = inc.map { folder =>
           "-i " + folder.getAbsolutePath
         }.mkString(" ")
-        val cmd = "java -jar %s %s %s %s -d %s -s %s".format(
-          jar, opts.mkString(" "), thriftIncludes, namespaceMappings,
-          outputDir.getAbsolutePath, sources.mkString(" "))
-        out.log.debug(cmd)
-        cmd ! out.log
+        for { language <- languages } {
+          out.log.info("compiling to %s".format(language))
+          val cmd = "java -jar %s %s --language %s %s %s -d %s -s %s ".format(
+            jar, opts.mkString(" "), language, thriftIncludes, namespaceMappings,
+            outputDir.getAbsolutePath, sources.mkString(" "))
+          out.log.debug(cmd)
+          cmd ! out.log  
+        }
       }
-      (outputDir ** "*.scala").get.toSeq
+      (outputDir ** "*.java").get.toSeq ++ (outputDir ** "*.scala").get.toSeq
     },
     sourceGenerators <+= scroogeGen
   )
@@ -183,7 +188,7 @@ object CompileThriftScrooge extends Plugin {
         if (jar.exists) {
           jar
         } else {
-          error("failed to fetch and unpack %s".format(fetchUrl))
+          sys.error("failed to fetch and unpack %s".format(fetchUrl))
         }
       } else {
         jar
