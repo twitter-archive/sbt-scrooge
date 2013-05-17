@@ -113,8 +113,10 @@ object CompileThriftScrooge extends Plugin {
       } else {
         Long.MaxValue
       }
-      val outputsLastModified = 
-        outputDirs.values.flatMap{dir => (dir ** "*.scala").get.map(_.lastModified)}
+
+      val outputsLastModified = outputDirs.flatMap{ case (language,dir) => 
+        (dir ** ("*." + language.toString)).get.map(_.lastModified) 
+      }
 
       val oldestOutput = if (outputsLastModified.size > 0) {
         outputsLastModified.min
