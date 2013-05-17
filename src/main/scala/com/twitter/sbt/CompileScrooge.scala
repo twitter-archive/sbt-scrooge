@@ -100,7 +100,7 @@ object CompileThriftScrooge extends Plugin {
     // look at includes and our sources to see if anything is newer than any of our output files
     scroogeIsDirty <<= (
       scroogeThriftSources,
-      scroogeThriftOutputFolders,
+      scroogeThriftOutputFolders, 
       scroogeThriftIncludeFolders
     ) map { (sources, outputDirs, inc) =>
       // figure out if we need to actually rebuild, based on mtimes.
@@ -140,29 +140,37 @@ object CompileThriftScrooge extends Plugin {
     ) map { (out, isDirty, sources, outputDirs, jar, opts, inc, nss, languages) =>
       // for some reason, sbt sometimes calls us multiple times, often with no source files.
       outputDirs.values.foreach( _.mkdirs())
+
+      def mapLanguages[T]( f:(Language,File) => T ): Set[T] = {
+        for {
+          language <- languages
+          outputDir <- outputDirs.get(language)  
+        } yield f(language,outputDir)
+      }
+
       if (isDirty && !sources.isEmpty) {
         out.log.info("Generating scrooge thrift for %s ...".format(sources.mkString(", ")))
         val sourcePaths = sources.mkString(" ")
-        
         val thriftIncludes = inc.map { folder => "-i " + folder.getAbsolutePath }.mkString(" ")
-        languages.flatMap(language =>{
-          outputDirs.get(language).map(outputDir =>{
-            val namespaceMappings = nss.get(language).map( 
-              _.map { case (k, v) => "-n " + k + "=" + v }.mkString(" ") 
-            ).getOrElse("")
 
-            out.log.info("compiling to %s".format(language.toString))
-            val cmd = "java -jar %s %s --language %s %s %s -d %s -s %s ".format(
-              jar, opts.mkString(" "), language.toString, thriftIncludes, namespaceMappings,
-              outputDir.getAbsolutePath, sources.mkString(" ")
-            )
-            out.log.debug(cmd)
-            cmd ! out.log
+        mapLanguages((language, outputDir) => {
+          val namespaceMappings = nss.get(language).map( 
+            _.map { case (k, v) => "-n " + k + "=" + v }.mkString(" ") 
+          ).getOrElse("")
 
-            (outputDir ** ("*." + language.toString)).get
-          })
-        }).reduce( _ ++ _ )
-      } else Seq()
+          out.log.info("compiling to %s".format(language.toString))
+          val cmd = "java -jar %s %s --language %s %s %s -d %s -s %s ".format(
+            jar, opts.mkString(" "), language.toString, thriftIncludes, namespaceMappings,
+            outputDir.getAbsolutePath, sources.mkString(" ")
+          )
+          out.log.debug(cmd)
+          cmd ! out.log
+        })
+      }
+
+      mapLanguages((language, outputDir) => { 
+        (outputDir ** ("*." + language.toString)).get 
+      }).reduce(_ ++ _)
     },
     sourceGenerators <+= scroogeGen
   )
