@@ -1,3 +1,7 @@
+# STATUS
+Twitter is no longer maintaining this project or responding to issues or PRs.
+See https://github.com/twitter/scrooge/tree/master/scrooge-sbt-plugin as a replacment
+
 # sbt11-scrooge
 
 Sbt11-scrooge is an sbt 0.11 plugin that adds support for using scrooge to
