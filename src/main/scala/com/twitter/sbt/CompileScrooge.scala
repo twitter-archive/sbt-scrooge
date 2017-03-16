@@ -5,15 +5,23 @@ import scala.collection.JavaConverters._
 import sbt._
 import Keys._
 
-/**
- * An sbt 0.11 plugin for generating thrift with scrooge.
- */
 object CompileThriftScrooge extends Plugin {
+
+  sealed trait Language
+  case object Scala extends Language{
+    override def toString = "scala"
+  }
+  case object Java extends Language{
+    override def toString = "java"
+  }
+
   // keys used to fetch scrooge:
   val scroogeVersion = SettingKey[String](
     "scrooge-version",
     "version of scrooge to download and use"
   )
+
+  val scroogeLanguages = SettingKey[Set[Language]]("scrooge-languages","languages to generate thrift from")
 
   val scroogeName = SettingKey[String](
     "scrooge-name",
@@ -46,7 +54,7 @@ object CompileThriftScrooge extends Plugin {
     "folders to search for thrift 'include' directives"
   )
 
-  val scroogeThriftNamespaceMap = SettingKey[Map[String, String]](
+  val scroogeThriftNamespaceMaps = SettingKey[Map[Language,Map[String, String]]](
     "scrooge-thrift-namespace-map",
     "namespace rewriting, to support generation of java/finagle/scrooge into the same jar"
   )
@@ -61,19 +69,19 @@ object CompileThriftScrooge extends Plugin {
     "thrift source files to compile"
   )
 
-  val scroogeThriftOutputFolder = SettingKey[File](
+  val scroogeThriftOutputFolders = SettingKey[Map[Language,File]](
     "scrooge-thrift-output-folder",
-    "output folder for generated scala files (defaults to sourceManaged)"
+    "output folder for generated files (defaults to sourceManaged)"
   )
 
   val scroogeIsDirty = TaskKey[Boolean](
     "scrooge-is-dirty",
-    "true if scrooge has decided it needs to regenerate the scala files from thrift sources"
+    "true if scrooge has decided it needs to regenerate the files from thrift sources"
   )
 
   val scroogeGen = TaskKey[Seq[File]](
     "scrooge-gen",
-    "generate scala code from thrift files using scrooge"
+    "generate code from thrift files using scrooge"
   )
 
   /**
@@ -84,17 +92,17 @@ object CompileThriftScrooge extends Plugin {
   val genThriftSettings: Seq[Setting[_]] = Seq(
     scroogeThriftSourceFolder <<= (sourceDirectory) { _ / "thrift" },
     scroogeThriftSources <<= (scroogeThriftSourceFolder) { srcDir => (srcDir ** "*.thrift").get },
-    scroogeThriftOutputFolder <<= (sourceManaged) { _ / "scala" },
+    scroogeThriftOutputFolders <<= (scroogeLanguages, sourceManaged) { (languages, source) => 
+      languages.map(language =>  (language, source / language.toString) ).toMap
+    },
     scroogeThriftIncludeFolders := Seq(),
-    scroogeThriftNamespaceMap := Map(),
-
+    scroogeThriftNamespaceMaps := Map(),
     // look at includes and our sources to see if anything is newer than any of our output files
     scroogeIsDirty <<= (
-      streams,
       scroogeThriftSources,
-      scroogeThriftOutputFolder,
+      scroogeThriftOutputFolders, 
       scroogeThriftIncludeFolders
-    ) map { (out, sources, outputDir, inc) =>
+    ) map { (sources, outputDirs, inc) =>
       // figure out if we need to actually rebuild, based on mtimes.
       val allSourceDeps = sources ++ inc.foldLeft(Seq[File]()) { (files, dir) =>
         files ++ (dir ** "*.thrift").get
@@ -105,7 +113,11 @@ object CompileThriftScrooge extends Plugin {
       } else {
         Long.MaxValue
       }
-      val outputsLastModified = (outputDir ** "*.scala").get.map(_.lastModified)
+
+      val outputsLastModified = outputDirs.flatMap{ case (language,dir) => 
+        (dir ** ("*." + language.toString)).get.map(_.lastModified) 
+      }
+
       val oldestOutput = if (outputsLastModified.size > 0) {
         outputsLastModified.min
       } else {
@@ -119,36 +131,53 @@ object CompileThriftScrooge extends Plugin {
       streams,
       scroogeIsDirty,
       scroogeThriftSources,
-      scroogeThriftOutputFolder,
+      scroogeThriftOutputFolders,
       scroogeFetch,
       scroogeBuildOptions,
       scroogeThriftIncludeFolders,
-      scroogeThriftNamespaceMap
-    ) map { (out, isDirty, sources, outputDir, jar, opts, inc, ns) =>
+      scroogeThriftNamespaceMaps,
+      scroogeLanguages
+    ) map { (out, isDirty, sources, outputDirs, jar, opts, inc, nss, languages) =>
       // for some reason, sbt sometimes calls us multiple times, often with no source files.
-      outputDir.mkdirs()
+      outputDirs.values.foreach( _.mkdirs())
+
+      def mapLanguages[T]( f:(Language,File) => T ): Set[T] = {
+        for {
+          language <- languages
+          outputDir <- outputDirs.get(language)  
+        } yield f(language,outputDir)
+      }
+
       if (isDirty && !sources.isEmpty) {
         out.log.info("Generating scrooge thrift for %s ...".format(sources.mkString(", ")))
         val sourcePaths = sources.mkString(" ")
-        val namespaceMappings = ns.map { case (k, v) =>
-          "-n " + k + "=" + v
-        }.mkString(" ")
-        val thriftIncludes = inc.map { folder =>
-          "-i " + folder.getAbsolutePath
-        }.mkString(" ")
-        val cmd = "java -jar %s %s %s %s -d %s -s %s".format(
-          jar, opts.mkString(" "), thriftIncludes, namespaceMappings,
-          outputDir.getAbsolutePath, sources.mkString(" "))
-        out.log.debug(cmd)
-        cmd ! out.log
+        val thriftIncludes = inc.map { folder => "-i " + folder.getAbsolutePath }.mkString(" ")
+
+        mapLanguages((language, outputDir) => {
+          val namespaceMappings = nss.get(language).map( 
+            _.map { case (k, v) => "-n " + k + "=" + v }.mkString(" ") 
+          ).getOrElse("")
+
+          out.log.info("compiling to %s".format(language.toString))
+          val cmd = "java -jar %s %s --language %s %s %s -d %s -s %s ".format(
+            jar, opts.mkString(" "), language.toString, thriftIncludes, namespaceMappings,
+            outputDir.getAbsolutePath, sources.mkString(" ")
+          )
+          out.log.debug(cmd)
+          cmd ! out.log
+        })
       }
-      (outputDir ** "*.scala").get.toSeq
+
+      mapLanguages((language, outputDir) => { 
+        (outputDir ** ("*." + language.toString)).get 
+      }).reduce(_ ++ _)
     },
     sourceGenerators <+= scroogeGen
   )
 
   val newSettings = Seq(
     scroogeVersion := "3.0.0",
+    scroogeLanguages := Set(Scala),
     scroogeBuildOptions := Seq("--finagle", "--ostrich", "--verbose"),
     scroogeName <<= (scroogeVersion) { ver => "scrooge-%s".format(ver) },
     scroogeCacheFolder <<= (baseDirectory) { (base) =>
@@ -183,7 +212,7 @@ object CompileThriftScrooge extends Plugin {
         if (jar.exists) {
           jar
         } else {
-          error("failed to fetch and unpack %s".format(fetchUrl))
+          sys.error("failed to fetch and unpack %s".format(fetchUrl))
         }
       } else {
         jar
